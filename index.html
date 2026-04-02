@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Literature Tutor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="glass-panel">
+            <span class="eyebrow">AI-powered reading companion</span>
+            <h1>AI Literature Tutor</h1>
+            <p>Analyze books, unpack themes, and hold guided literary discussions in one place.</p>
+        </header>
+
+        <main class="main-content">
+            <section class="book-search-section glass-panel">
+                <div class="section-copy">
+                    <h2>Explore a Book</h2>
+                    <p>Enter any novel, play, poem, or author to generate a student-friendly literary breakdown.</p>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="bookInput" placeholder="Try: Pride and Prejudice, Macbeth, The Alchemist...">
+                    <button id="analyzeBtn">Analyze</button>
+                </div>
+                <div class="quick-prompts" id="quickPrompts">
+                    <button class="prompt-chip" type="button" data-book="To Kill a Mockingbird">To Kill a Mockingbird</button>
+                    <button class="prompt-chip" type="button" data-book="1984">1984</button>
+                    <button class="prompt-chip" type="button" data-book="Hamlet">Hamlet</button>
+                    <button class="prompt-chip" type="button" data-book="The Great Gatsby">The Great Gatsby</button>
+                </div>
+                <p class="status-text" id="statusText">Ready to analyze a text and start a discussion.</p>
+            </section>
+
+            <div class="content-grid">
+                <section class="analysis-dashboard glass-panel hidden" id="analysisDashboard">
+                    <div class="dashboard-header">
+                        <h2 id="bookTitleDisplay">Book Title</h2>
+                        <div class="theme-tags" id="themeTags"></div>
+                    </div>
+                    <div class="dashboard-body">
+                        <h3>Summary</h3>
+                        <p id="bookSummary">Loading analysis...</p>
+                        <h3>Why It Matters</h3>
+                        <p id="bookImportance"></p>
+                        <h3>Key Characters</h3>
+                        <ul id="characterList"></ul>
+                        <h3>Discussion Questions</h3>
+                        <ul id="discussionList"></ul>
+                        <h3>Study Tips</h3>
+                        <ul id="studyTipsList"></ul>
+                    </div>
+                </section>
+
+                <section class="chat-section glass-panel hidden" id="chatSection">
+                    <div class="chat-header">
+                        <h2>Tutor Discussion</h2>
+                        <p id="chatSubtitle">Ask follow-up questions and get personalized explanations.</p>
+                    </div>
+                    <div class="chat-window" id="chatWindow">
+                        <div class="message tutor-msg">
+                            <p>Hello! I'm your AI Literature Tutor. Analyze a book, then ask me about themes, symbols, characters, plot, or exam preparation.</p>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatInput" placeholder="Ask a question about the book...">
+                        <button id="sendMsgBtn">Send</button>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
