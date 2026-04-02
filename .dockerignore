@@ -5,3 +5,5 @@ Dockerfile
 .gitignore
 .env
 .vscode
+backend/node_modules
+backend/.env
