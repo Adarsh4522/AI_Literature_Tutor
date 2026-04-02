@@ -3,7 +3,9 @@ const path = require('path');
 const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
+
+const missingApiKeyMessage = 'Missing GEMINI_API_KEY. Set it in backend/.env for local runs or pass it to Docker with -e/--env-file.';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -14,7 +16,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));
 
 if (!apiKey) {
-    console.warn('GEMINI_API_KEY is not set. Add it to backend/.env before using the AI routes.');
+    console.warn(missingApiKeyMessage);
 }
 
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
@@ -28,7 +30,7 @@ app.post('/analyze', async (req, res) => {
     }
 
     if (!model) {
-        return res.status(500).json({ error: 'Missing GEMINI_API_KEY in backend/.env.' });
+        return res.status(500).json({ error: missingApiKeyMessage });
     }
 
     try {
@@ -72,7 +74,7 @@ app.post('/chat', async (req, res) => {
     }
 
     if (!model) {
-        return res.status(500).json({ error: 'Missing GEMINI_API_KEY in backend/.env.' });
+        return res.status(500).json({ error: missingApiKeyMessage });
     }
 
     try {
