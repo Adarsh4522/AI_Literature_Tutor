@@ -67,7 +67,7 @@ async function handleAnalyzeRequest() {
     discussionList.innerHTML = '';
     studyTipsList.innerHTML = '';
     resetChatForBook(query);
-    updateStatus(`Analyzing "${query}" with the AI tutor...`);
+    updateStatus(`Analyzing "${query}" with LitWise...`);
 
     try {
         const data = await fetchBookAnalysis(query);

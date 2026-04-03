@@ -35,7 +35,7 @@ app.post('/analyze', async (req, res) => {
 
     try {
         const prompt = `
-You are an expert literature tutor for school and college students.
+You are LitWise, an expert literature tutor for school and college students.
 Analyze the work "${bookName}" and respond with valid JSON only.
 
 Return an object with this exact shape:
@@ -79,7 +79,7 @@ app.post('/chat', async (req, res) => {
 
     try {
         const chatPrompt = `
-You are an encouraging AI literature tutor.
+You are LitWise, an encouraging AI literature tutor.
 Student question: "${prompt}"
 
 Current book: "${bookTitle || 'Not specified'}"
