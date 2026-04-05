@@ -78,6 +78,7 @@ app.post('/chat', async (req, res) => {
     }
 
     try {
+        const wantsFullStory = asksForFullStory(prompt);
         const chatPrompt = `
 You are LitWise, an encouraging AI literature tutor.
 Student question: "${prompt}"
@@ -93,7 +94,8 @@ Instructions:
 - If a book is provided, tailor the answer to that text.
 - If the student asks for essay help, include a clear thesis direction.
 - If the question is unclear, make a helpful best effort instead of refusing.
-- Keep the response under 220 words.
+- If the student explicitly asks for the whole story, full plot, or complete story, give a fuller spoiler-aware retelling with the major events from beginning to end in 450-700 words.
+- Otherwise, keep the response under 220 words.
         `.trim();
 
         const reply = await generateText(chatPrompt);
@@ -168,4 +170,24 @@ function fallbackAnalysisFromText(text, fallbackTitle) {
 
 function ensureArray(value) {
     return Array.isArray(value) ? value : [];
+}
+
+function asksForFullStory(prompt) {
+    const normalizedPrompt = String(prompt).toLowerCase();
+
+    return [
+        'whole story',
+        'full story',
+        'complete story',
+        'entire story',
+        'whole plot',
+        'full plot',
+        'complete plot',
+        'entire plot',
+        'story from beginning to end',
+        'plot from beginning to end',
+        'tell me the whole story',
+        'tell me the full story',
+        'summarize the whole story'
+    ].some((phrase) => normalizedPrompt.includes(phrase));
 }
