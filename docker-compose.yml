@@ -1,0 +1,11 @@
+services:
+  litwise:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: ai-tutor
+    ports:
+      - "5000:5000"
+    env_file:
+      - backend/.env
+    restart: unless-stopped

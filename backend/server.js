@@ -6,6 +6,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
 
 const missingApiKeyMessage = 'Missing GEMINI_API_KEY. Set it in backend/.env for local runs or pass it to Docker with -e/--env-file.';
+const highTrafficMessage = 'LitWise is experiencing high AI traffic. Please try again in a few seconds.';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -62,7 +63,7 @@ Rules:
         return res.json(analysis);
     } catch (error) {
         console.error('Analyze error:', error);
-        return res.status(500).json({ error: error.message || 'Failed to generate literary analysis.' });
+        return res.status(500).json({ error: getUserFacingErrorMessage(error, 'Failed to generate literary analysis.') });
     }
 });
 
@@ -102,7 +103,7 @@ Instructions:
         return res.json({ reply });
     } catch (error) {
         console.error('Chat error:', error);
-        return res.status(500).json({ error: error.message || 'Failed to generate tutor response.' });
+        return res.status(500).json({ error: getUserFacingErrorMessage(error, 'Failed to generate tutor response.') });
     }
 });
 
@@ -190,4 +191,19 @@ function asksForFullStory(prompt) {
         'tell me the full story',
         'summarize the whole story'
     ].some((phrase) => normalizedPrompt.includes(phrase));
+}
+
+function getUserFacingErrorMessage(error, fallbackMessage) {
+    const rawMessage = String(error?.message || '').toLowerCase();
+
+    if (
+        rawMessage.includes('503') ||
+        rawMessage.includes('service unavailable') ||
+        rawMessage.includes('high demand') ||
+        rawMessage.includes('unavailable')
+    ) {
+        return highTrafficMessage;
+    }
+
+    return error?.message || fallbackMessage;
 }
