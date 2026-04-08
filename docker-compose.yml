@@ -3,9 +3,23 @@ services:
     build:
       context: .
       dockerfile: dockerfile
-    container_name: ai-tutor
+    container_name: litwise
     ports:
       - "5000:5000"
     env_file:
       - backend/.env
+    volumes:
+      - ./backend/cache:/app/backend/cache
     restart: unless-stopped
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm
+    restart: unless-stopped
+    ports:
+      - "80:80"     # Public HTTP
+      - "81:81"     # Admin UI
+      - "443:443"   # HTTPS
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt

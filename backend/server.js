@@ -1,3 +1,4 @@
+const fs = require('fs');
 const express = require('express');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -7,11 +8,13 @@ dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
 
 const missingApiKeyMessage = 'Missing GEMINI_API_KEY. Set it in backend/.env for local runs or pass it to Docker with -e/--env-file.';
 const highTrafficMessage = 'LitWise is experiencing high AI traffic. Please try again in a few seconds.';
+const analysisCacheFile = path.join(__dirname, 'cache', 'analysis-cache.json');
 
 const app = express();
 const port = process.env.PORT || 5000;
 const apiKey = process.env.GEMINI_API_KEY;
 const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const analysisCache = loadAnalysisCache();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));
@@ -25,9 +28,14 @@ const model = genAI ? genAI.getGenerativeModel({ model: modelName }) : null;
 
 app.post('/analyze', async (req, res) => {
     const { bookName } = req.body;
+    const cacheKey = normalizeCacheKey(bookName);
 
     if (!bookName || !bookName.trim()) {
         return res.status(400).json({ error: 'Book name is required.' });
+    }
+
+    if (analysisCache[cacheKey]) {
+        return res.json(analysisCache[cacheKey]);
     }
 
     if (!model) {
@@ -59,6 +67,7 @@ Rules:
 
         const rawText = await generateText(prompt);
         const analysis = parseAnalysisResponse(rawText, bookName);
+        cacheAnalysis(cacheKey, analysis);
 
         return res.json(analysis);
     } catch (error) {
@@ -206,4 +215,45 @@ function getUserFacingErrorMessage(error, fallbackMessage) {
     }
 
     return error?.message || fallbackMessage;
+}
+
+function loadAnalysisCache() {
+    try {
+        ensureCacheDirExists();
+
+        if (!fs.existsSync(analysisCacheFile)) {
+            fs.writeFileSync(analysisCacheFile, '{}');
+            return {};
+        }
+
+        return JSON.parse(fs.readFileSync(analysisCacheFile, 'utf8'));
+    } catch (error) {
+        console.warn('Could not load analysis cache:', error.message);
+        return {};
+    }
+}
+
+function cacheAnalysis(cacheKey, analysis) {
+    const normalizedTitleKey = normalizeCacheKey(analysis?.title || '');
+
+    analysisCache[cacheKey] = analysis;
+
+    if (normalizedTitleKey) {
+        analysisCache[normalizedTitleKey] = analysis;
+    }
+
+    try {
+        ensureCacheDirExists();
+        fs.writeFileSync(analysisCacheFile, JSON.stringify(analysisCache, null, 2));
+    } catch (error) {
+        console.warn('Could not persist analysis cache:', error.message);
+    }
+}
+
+function ensureCacheDirExists() {
+    fs.mkdirSync(path.dirname(analysisCacheFile), { recursive: true });
+}
+
+function normalizeCacheKey(value) {
+    return String(value || '').trim().toLowerCase();
 }
