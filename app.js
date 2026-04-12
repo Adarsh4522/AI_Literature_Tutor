@@ -75,9 +75,9 @@ async function handleAnalyzeRequest() {
         renderAnalysis(data);
         updateStatus(`Analysis ready for "${data.title}". You can now ask follow-up questions.`);
     } catch (error) {
-        bookSummary.textContent = `Error: ${error.message}`;
+        bookSummary.textContent = error.message;
         bookImportance.textContent = 'The analysis could not be generated right now.';
-        updateStatus('Analysis failed. Check the backend server and API key, then try again.');
+        updateStatus(error.message || 'Analysis failed. Please try again.');
         console.error(error);
     } finally {
         toggleAnalyzeState(false);

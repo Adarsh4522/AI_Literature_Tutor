@@ -2,7 +2,7 @@ services:
   litwise:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     container_name: litwise
     ports:
       - "5000:5000"
@@ -10,16 +10,10 @@ services:
       - backend/.env
     volumes:
       - ./backend/cache:/app/backend/cache
+    networks:
+      - proxy-net
     restart: unless-stopped
 
-  nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: npm
-    restart: unless-stopped
-    ports:
-      - "80:80"     # Public HTTP
-      - "81:81"     # Admin UI
-      - "443:443"   # HTTPS
-    volumes:
-      - ./npm/data:/data
-      - ./npm/letsencrypt:/etc/letsencrypt
+networks:
+  proxy-net:
+    external: true
