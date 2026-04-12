@@ -2,18 +2,18 @@ const fs = require('fs');
 const express = require('express');
 const path = require('path');
 const dotenv = require('dotenv');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
 
-const missingApiKeyMessage = 'Missing GEMINI_API_KEY. Set it in backend/.env for local runs or pass it to Docker with -e/--env-file.';
+const missingApiKeyMessage = 'Missing GROQ_API_KEY. Set it in backend/.env for local runs or pass it to Docker with -e/--env-file.';
 const highTrafficMessage = 'LitWise is experiencing high AI traffic. Please try again in a few seconds.';
 const analysisCacheFile = path.join(__dirname, 'cache', 'analysis-cache.json');
+const groqApiUrl = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 
 const app = express();
 const port = process.env.PORT || 5000;
-const apiKey = process.env.GEMINI_API_KEY;
-const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const apiKey = process.env.GROQ_API_KEY;
+const modelName = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 const analysisCache = loadAnalysisCache();
 
 app.use(express.json());
@@ -22,9 +22,6 @@ app.use(express.static(path.join(__dirname, '..')));
 if (!apiKey) {
     console.warn(missingApiKeyMessage);
 }
-
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI ? genAI.getGenerativeModel({ model: modelName }) : null;
 
 app.post('/analyze', async (req, res) => {
     const { bookName } = req.body;
@@ -38,7 +35,7 @@ app.post('/analyze', async (req, res) => {
         return res.json(analysisCache[cacheKey]);
     }
 
-    if (!model) {
+    if (!apiKey) {
         return res.status(500).json({ error: missingApiKeyMessage });
     }
 
@@ -83,7 +80,7 @@ app.post('/chat', async (req, res) => {
         return res.status(400).json({ error: 'Prompt is required.' });
     }
 
-    if (!model) {
+    if (!apiKey) {
         return res.status(500).json({ error: missingApiKeyMessage });
     }
 
@@ -121,9 +118,31 @@ app.listen(port, () => {
 });
 
 async function generateText(prompt) {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text().trim();
+    const response = await fetch(groqApiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw buildProviderError(response.status, payload);
+    }
+
+    return String(payload?.choices?.[0]?.message?.content || '').trim();
 }
 
 function parseAnalysisResponse(rawText, fallbackTitle) {
@@ -209,12 +228,28 @@ function getUserFacingErrorMessage(error, fallbackMessage) {
         rawMessage.includes('503') ||
         rawMessage.includes('service unavailable') ||
         rawMessage.includes('high demand') ||
+        rawMessage.includes('rate limit') ||
+        rawMessage.includes('too many requests') ||
         rawMessage.includes('unavailable')
     ) {
         return highTrafficMessage;
     }
 
     return error?.message || fallbackMessage;
+}
+
+function buildProviderError(status, payload) {
+    const providerMessage =
+        payload?.error?.message ||
+        payload?.detail ||
+        payload?.message ||
+        `Groq request failed with status ${status}.`;
+    const error = new Error(providerMessage);
+
+    error.status = status;
+    error.payload = payload;
+
+    return error;
 }
 
 function loadAnalysisCache() {
