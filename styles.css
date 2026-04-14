@@ -260,11 +260,17 @@ button:disabled {
 .chat-section {
     display: flex;
     flex-direction: column;
-    min-height: 680px;
+    height: 680px;
+    max-height: 680px;
 }
 
 .chat-header {
     margin-bottom: 0.8rem;
+    flex-shrink: 0;
+}
+
+.chat-input-area {
+    flex-shrink: 0;
 }
 
 .chat-window {
@@ -274,6 +280,7 @@ button:disabled {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-height: 0;
 }
 
 .message {
@@ -315,7 +322,8 @@ button:disabled {
     }
 
     .chat-section {
-        min-height: 560px;
+        height: 560px;
+        max-height: 560px;
     }
 }
 
