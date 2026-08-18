@@ -93,10 +93,18 @@ async function fetchBookAnalysis(bookName) {
         body: JSON.stringify({ bookName })
     });
 
-    const payload = await response.json();
+    let payload = {};
+    try {
+        const text = await response.text();
+        if (text) {
+            payload = JSON.parse(text);
+        }
+    } catch (error) {
+        throw new Error(`Server returned an invalid response. Status: ${response.status}`);
+    }
 
     if (!response.ok) {
-        throw new Error(payload.error || 'Failed to fetch analysis from server');
+        throw new Error(payload.error || `Failed to fetch analysis from server. Status: ${response.status}`);
     }
 
     return payload;
@@ -150,10 +158,18 @@ async function fetchChatResponse(prompt) {
         })
     });
 
-    const payload = await response.json();
+    let payload = {};
+    try {
+        const text = await response.text();
+        if (text) {
+            payload = JSON.parse(text);
+        }
+    } catch (error) {
+        throw new Error(`Server returned an invalid response. Status: ${response.status}`);
+    }
 
     if (!response.ok) {
-        throw new Error(payload.error || 'Failed to fetch chat response');
+        throw new Error(payload.error || `Failed to fetch chat response. Status: ${response.status}`);
     }
 
     return payload.reply;
