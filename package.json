@@ -1,0 +1,25 @@
+{
+  "name": "ai-literature-tutor",
+  "version": "1.0.0",
+  "description": "LitWise is an AI-powered literature tutor that helps students explore books, novels, plays, poems, and authors through instant literary analysis and guided discussion.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adarsh4522/AI_Literature_Tutor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Adarsh4522/AI_Literature_Tutor/issues"
+  },
+  "homepage": "https://github.com/Adarsh4522/AI_Literature_Tutor#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}
