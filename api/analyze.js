@@ -1,7 +1,4 @@
 const express = require('express');
-const dotenv = require('dotenv');
-
-dotenv.config({ quiet: true });
 
 const app = express();
 
@@ -20,27 +17,11 @@ const missingApiKeyMessage =
 const highTrafficMessage =
     'LitWise is experiencing high AI traffic. Please try again in a few seconds.';
 
-/*
-Memory cache.
-
-This works as a temporary cache. However, serverless functions
-can restart, so this cache is not guaranteed to persist permanently.
-*/
 const analysisCache = {};
 
 app.use(express.json());
 
-if (!apiKey) {
-    console.warn(missingApiKeyMessage);
-}
-
-
-/* =========================================================
-   ANALYZE BOOK API
-   POST /api/analyze
-========================================================= */
-
-app.post('/api/analyze', async (req, res) => {
+app.post('/', async (req, res) => {
     const { bookName } = req.body;
 
     if (!bookName || !bookName.trim()) {
@@ -51,7 +32,6 @@ app.post('/api/analyze', async (req, res) => {
 
     const cacheKey = normalizeCacheKey(bookName);
 
-    // Return cached analysis if available
     if (analysisCache[cacheKey]) {
         return res.json(analysisCache[cacheKey]);
     }
@@ -88,13 +68,8 @@ Rules:
         `.trim();
 
         const rawText = await generateText(prompt);
+        const analysis = parseAnalysisResponse(rawText, bookName);
 
-        const analysis = parseAnalysisResponse(
-            rawText,
-            bookName
-        );
-
-        // Store in temporary memory cache
         analysisCache[cacheKey] = analysis;
 
         const normalizedTitleKey =
@@ -118,91 +93,21 @@ Rules:
     }
 });
 
-
-/* =========================================================
-   CHAT API
-   POST /api/chat
-========================================================= */
-
-app.post('/api/chat', async (req, res) => {
-    const { prompt, bookTitle, analysis } = req.body;
-
-    if (!prompt || !prompt.trim()) {
-        return res.status(400).json({
-            error: 'Prompt is required.'
-        });
-    }
-
-    if (!apiKey) {
-        return res.status(500).json({
-            error: missingApiKeyMessage
-        });
-    }
-
-    try {
-        const chatPrompt = `
-You are LitWise, an encouraging AI literature tutor.
-
-Student question: "${prompt}"
-
-Current book: "${bookTitle || 'Not specified'}"
-
-Known analysis:
-${JSON.stringify(analysis || {}, null, 2)}
-
-Instructions:
-- Answer in a warm, helpful teaching tone.
-- Keep the response focused on literature learning.
-- If a book is provided, tailor the answer to that text.
-- If the student asks for essay help, include a clear thesis direction.
-- If the question is unclear, make a helpful best effort instead of refusing.
-- If the student explicitly asks for the whole story, full plot, or complete story, give a fuller spoiler-aware retelling with the major events from beginning to end in 450-700 words.
-- Otherwise, keep the response under 220 words.
-        `.trim();
-
-        const reply = await generateText(chatPrompt);
-
-        return res.json({
-            reply
-        });
-
-    } catch (error) {
-        console.error('Chat error:', error);
-
-        return res.status(500).json({
-            error: getUserFacingErrorMessage(
-                error,
-                'Failed to generate tutor response.'
-            )
-        });
-    }
-});
-
-
-/* =========================================================
-   GROQ API FUNCTION
-========================================================= */
-
 async function generateText(prompt) {
-
     const response = await fetch(groqApiUrl, {
         method: 'POST',
-
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`
         },
-
         body: JSON.stringify({
             model: modelName,
-
             messages: [
                 {
                     role: 'user',
                     content: prompt
                 }
             ],
-
             temperature: 0.7
         })
     });
@@ -211,10 +116,7 @@ async function generateText(prompt) {
         await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw buildProviderError(
-            response.status,
-            payload
-        );
+        throw buildProviderError(response.status, payload);
     }
 
     return String(
@@ -222,39 +124,19 @@ async function generateText(prompt) {
     ).trim();
 }
 
-
-/* =========================================================
-   JSON PARSING
-========================================================= */
-
 function parseAnalysisResponse(rawText, fallbackTitle) {
-
     const cleaned = stripCodeFences(rawText);
 
     try {
         const parsed = JSON.parse(cleaned);
-
-        return normalizeAnalysis(
-            parsed,
-            fallbackTitle
-        );
-
+        return normalizeAnalysis(parsed, fallbackTitle);
     } catch (error) {
-
-        console.warn(
-            'JSON parse failed, using fallback parser.'
-        );
-
-        return fallbackAnalysisFromText(
-            cleaned,
-            fallbackTitle
-        );
+        console.warn('JSON parse failed, using fallback parser.');
+        return fallbackAnalysisFromText(cleaned, fallbackTitle);
     }
 }
 
-
 function stripCodeFences(text) {
-
     return String(text || '')
         .replace(/^```json\s*/i, '')
         .replace(/^```\s*/i, '')
@@ -262,63 +144,37 @@ function stripCodeFences(text) {
         .trim();
 }
 
-
 function normalizeAnalysis(analysis, fallbackTitle) {
-
     return {
-        title:
-            analysis.title || fallbackTitle,
-
-        summary:
-            analysis.summary || 'Summary unavailable.',
-
+        title: analysis.title || fallbackTitle,
+        summary: analysis.summary || 'Summary unavailable.',
         whyItMatters:
             analysis.whyItMatters ||
             'Literary significance unavailable.',
-
-        themes:
-            ensureArray(analysis.themes),
-
-        characters:
-            ensureArray(analysis.characters),
-
+        themes: ensureArray(analysis.themes),
+        characters: ensureArray(analysis.characters),
         discussionQuestions:
             ensureArray(analysis.discussionQuestions),
-
-        studyTips:
-            ensureArray(analysis.studyTips)
+        studyTips: ensureArray(analysis.studyTips)
     };
 }
 
-
 function fallbackAnalysisFromText(text, fallbackTitle) {
-
     return {
         title: fallbackTitle,
-
-        summary:
-            text || 'Summary unavailable.',
-
+        summary: text || 'Summary unavailable.',
         whyItMatters:
             'This text is significant for its themes, character development, and literary interpretation.',
-
-        themes: [
-            'Identity',
-            'Conflict',
-            'Society'
-        ],
-
+        themes: ['Identity', 'Conflict', 'Society'],
         characters: [
             'Main character',
             'Supporting character'
         ],
-
         discussionQuestions: [
             'What central conflict drives the text?',
             'How do the main themes shape the characters?',
             'What message might the author want readers to consider?'
         ],
-
         studyTips: [
             'Track major themes with short quotes.',
             'Connect character actions to the author message.',
@@ -327,18 +183,17 @@ function fallbackAnalysisFromText(text, fallbackTitle) {
     };
 }
 
-
 function ensureArray(value) {
     return Array.isArray(value) ? value : [];
 }
 
-
-/* =========================================================
-   HELPER FUNCTIONS
-========================================================= */
+function normalizeCacheKey(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase();
+}
 
 function getUserFacingErrorMessage(error, fallbackMessage) {
-
     const rawMessage =
         String(error?.message || '').toLowerCase();
 
@@ -356,34 +211,14 @@ function getUserFacingErrorMessage(error, fallbackMessage) {
     return error?.message || fallbackMessage;
 }
 
-
 function buildProviderError(status, payload) {
-
     const providerMessage =
         payload?.error?.message ||
         payload?.detail ||
         payload?.message ||
         `Groq request failed with status ${status}.`;
 
-    const error = new Error(providerMessage);
-
-    error.status = status;
-    error.payload = payload;
-
-    return error;
+    return new Error(providerMessage);
 }
-
-
-function normalizeCacheKey(value) {
-    return String(value || '')
-        .trim()
-        .toLowerCase();
-}
-
-
-/* =========================================================
-   IMPORTANT:
-   NO app.listen() FOR VERCEL
-========================================================= */
 
 module.exports = app;
