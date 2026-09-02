@@ -4,4 +4,4 @@ node_modules/
 backend/cache/*.json
 !backend/cache/.gitkeep
 
-.vercel
+

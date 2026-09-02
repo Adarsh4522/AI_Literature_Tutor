@@ -5,15 +5,9 @@ services:
       dockerfile: Dockerfile
     container_name: litwise
     ports:
-      - "5000:5000"
+      - "80:5000"
     env_file:
-      - backend/.env
+      - ./backend/.env
     volumes:
       - ./backend/cache:/app/backend/cache
-    networks:
-      - proxy-net
     restart: unless-stopped
-
-networks:
-  proxy-net:
-    external: true

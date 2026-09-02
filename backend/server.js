@@ -23,7 +23,7 @@ if (!apiKey) {
     console.warn(missingApiKeyMessage);
 }
 
-app.post('/analyze', async (req, res) => {
+app.post('/api/analyze', async (req, res) => {
     const { bookName } = req.body;
     const cacheKey = normalizeCacheKey(bookName);
 
@@ -73,7 +73,7 @@ Rules:
     }
 });
 
-app.post('/chat', async (req, res) => {
+app.post('/api/chat', async (req, res) => {
     const { prompt, bookTitle, analysis } = req.body;
 
     if (!prompt || !prompt.trim()) {
