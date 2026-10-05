@@ -85,7 +85,7 @@ async function handleAnalyzeRequest() {
 }
 
 async function fetchBookAnalysis(bookName) {
-    const response = await fetch('/api/analyze', {
+    const response = await fetch('/analyze', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -146,7 +146,7 @@ async function handleSendMessage() {
 }
 
 async function fetchChatResponse(prompt) {
-    const response = await fetch('/api/chat', {
+    const response = await fetch('/chat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
