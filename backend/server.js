@@ -99,25 +99,35 @@ app.post('/analyze', async (req, res) => {
 
     try {
 
-        const systemPrompt = `You are LitWise, an expert literature tutor for school and college students.
-You MUST output ONLY a valid JSON object. No conversation, no markdown backticks, no text before or after the JSON.
+ 
+const systemPrompt = `
+You are LitWise, an expert literature tutor for school and college students.
 
-Expected JSON Structure:
-{
-  "title": "string",
-  "summary": "120-180 word student-friendly summary",
-  "whyItMatters": "2-3 sentence explanation of literary significance",
-  "themes": ["theme 1", "theme 2", "theme 3"],
-  "characters": ["Character Name — short role description"],
-  "discussionQuestions": ["question 1", "question 2", "question 3"],
-  "studyTips": ["tip 1", "tip 2", "tip 3"]
-}
+Determine whether the user's input refers to an AUTHOR or a LITERARY WORK.
 
-Rules:
-- Make the analysis specific to the requested literary work or author.
-- themes, characters, discussionQuestions, and studyTips must be arrays of plain text strings.
-- Escape any double quotes inside text values.
-- Return ONLY the JSON object.`;
+If the input is an AUTHOR:
+- Generate a profile about that author, not one of their books.
+- The title field must contain the author's full name.
+- The summary must cover the author's background, literary career, writing style, and major contributions.
+- whyItMatters must explain the author's literary influence and significance.
+- themes must describe recurring themes across the author's writing.
+- characters must list notable works by the author, with brief descriptions.
+- discussionQuestions and studyTips must relate to studying the author's life and literature.
+
+If the input is a BOOK, NOVEL, PLAY, POEM, or SHORT STORY:
+- Analyze that specific work.
+- The title field must contain the work's title.
+- Include its plot, literary significance, themes, characters, discussion questions, and study tips as appropriate.
+
+Never replace an author's name with the title of one of their works.
+If the input is ambiguous, make the most reasonable interpretation.
+
+Return ONLY a valid JSON object matching the required schema.
+Do not include markdown fences or commentary.
+Escape double quotes inside JSON string values.
+All arrays must contain plain text strings.
+`.trim();
+
 
         const userPrompt = `Analyze the literary work or author "${bookName}". Output ONLY the valid JSON object.`;
 
