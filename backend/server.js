@@ -469,42 +469,90 @@ function parseAnalysisResponse(
 // REGEX-BASED FIELD EXTRACTION
 // --------------------------------------------------
 
+
 function extractFieldsWithRegex(text) {
-    const extractStringField = (field) => {
-        const match = text.match(
-            new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'i')
-        );
-        return match
-            ? match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            : null;
-    };
+    try {
+        const cleaned = stripCodeFences(text);
 
-    const extractArrayField = (field) => {
-        const match = text.match(
-            new RegExp(`"${field}"\\s*:\\s*\\[([^\\]]*)\\]`, 'i')
-        );
-        if (!match) return [];
-        const items = [];
-        const itemRegex = /"((?:\\.|[^"\\])*)"/g;
-        let itemMatch;
-        while ((itemMatch = itemRegex.exec(match[1])) !== null) {
-            items.push(
-                itemMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            );
+        // First, try parsing the complete JSON response.
+        try {
+            const parsed = JSON.parse(cleaned);
+
+            if (parsed && typeof parsed === 'object') {
+                return {
+                    title: parsed.title ?? null,
+                    summary: parsed.summary ?? null,
+                    whyItMatters: parsed.whyItMatters ?? null,
+                    themes: Array.isArray(parsed.themes) ? parsed.themes : [],
+                    characters: Array.isArray(parsed.characters) ? parsed.characters : [],
+                    discussionQuestions: Array.isArray(parsed.discussionQuestions)
+                        ? parsed.discussionQuestions
+                        : [],
+                    studyTips: Array.isArray(parsed.studyTips) ? parsed.studyTips : []
+                };
+            }
+        } catch (_) {
+            // Continue to field-level extraction if the JSON is incomplete.
         }
-        return items;
-    };
 
-    return {
-        title: extractStringField('title'),
-        summary: extractStringField('summary'),
-        whyItMatters: extractStringField('whyItMatters'),
-        themes: extractArrayField('themes'),
-        characters: extractArrayField('characters'),
-        discussionQuestions: extractArrayField('discussionQuestions'),
-        studyTips: extractArrayField('studyTips')
-    };
+        // Recover individual fields from a partially malformed JSON response.
+        const extractStringField = (field) => {
+            const match = cleaned.match(
+                new RegExp(
+                    `"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,
+                    'i'
+                )
+            );
+
+            if (!match) return null;
+
+            try {
+                return JSON.parse(`"${match[1]}"`);
+            } catch (_) {
+                return match[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, '\n')
+                    .trim();
+            }
+        };
+
+        const extractArrayField = (field) => {
+            const match = cleaned.match(
+                new RegExp(`"${field}"\\s*:\\s*\\[([\\s\\S]*?)\\]`, 'i')
+            );
+
+            if (!match) return [];
+
+            const items = [];
+            const itemRegex = /"((?:\\.|[^"\\])*)"/g;
+            let itemMatch;
+
+            while ((itemMatch = itemRegex.exec(match[1])) !== null) {
+                try {
+                    items.push(JSON.parse(`"${itemMatch[1]}"`));
+                } catch (_) {
+                    items.push(itemMatch[1].replace(/\\"/g, '"'));
+                }
+            }
+
+            return items;
+        };
+
+        return {
+            title: extractStringField('title'),
+            summary: extractStringField('summary'),
+            whyItMatters: extractStringField('whyItMatters'),
+            themes: extractArrayField('themes'),
+            characters: extractArrayField('characters'),
+            discussionQuestions: extractArrayField('discussionQuestions'),
+            studyTips: extractArrayField('studyTips')
+        };
+    } catch (error) {
+        console.warn('Field extraction failed:', error.message);
+        return {};
+    }
 }
+
 
 
 // --------------------------------------------------
@@ -545,13 +593,18 @@ function normalizeAnalysis(
             analysis?.title ||
             fallbackTitle,
 
-        summary:
-            analysis?.summary ||
-            'Summary unavailable.',
+       
+summary:
+    typeof analysis?.summary === 'string' &&
+    analysis.summary.trim().length > 0
+        ? analysis.summary.trim()
+        : 'A summary could not be generated. Please try analyzing this title again.',
 
-        whyItMatters:
-            analysis?.whyItMatters ||
-            'Literary significance unavailable.',
+whyItMatters:
+    typeof analysis?.whyItMatters === 'string' &&
+    analysis.whyItMatters.trim().length > 0
+        ? analysis.whyItMatters.trim()
+        : 'Literary significance could not be generated. Please try again.',
 
         themes:
             normalizeTextArray(
