@@ -32,7 +32,7 @@ const apiKey = process.env.GROQ_API_KEY;
 
 const modelName =
     process.env.GROQ_MODEL ||
-    'openai/gpt-oss-20b';
+    'openai/gpt-oss-120b';
 
 const analysisCache = loadAnalysisCache();
 
@@ -99,15 +99,10 @@ app.post('/analyze', async (req, res) => {
 
     try {
 
-        const prompt = `
-You are LitWise, an expert literature tutor for school and college students.
+        const systemPrompt = `You are LitWise, an expert literature tutor for school and college students.
+You MUST output ONLY a valid JSON object. No conversation, no markdown backticks, no text before or after the JSON.
 
-Analyze the literary work "${bookName}".
-
-Return a complete literature analysis suitable for students.
-
-Return a JSON object with exactly these fields:
-
+Expected JSON Structure:
 {
   "title": "string",
   "summary": "120-180 word student-friendly summary",
@@ -119,25 +114,17 @@ Return a JSON object with exactly these fields:
 }
 
 Rules:
-- Make the analysis specific to "${bookName}".
-- Do not use generic placeholder information.
-- themes must be an array of plain text strings.
-- characters must be an array of plain text strings.
-- discussionQuestions must be an array of plain text strings.
-- studyTips must be an array of plain text strings.
-- Keep all values as plain text.
-- Do not use Markdown.
-- Do not use code fences.
-- Return only valid JSON.
-- If the title is ambiguous, make a reasonable best guess.
-`.trim();
+- Make the analysis specific to the requested literary work or author.
+- themes, characters, discussionQuestions, and studyTips must be arrays of plain text strings.
+- Escape any double quotes inside text values.
+- Return ONLY the JSON object.`;
 
+        const userPrompt = `Analyze the literary work or author "${bookName}". Output ONLY the valid JSON object.`;
 
-        // IMPORTANT:
-        // true tells generateText() to use strict JSON schema mode.
         const rawText = await generateText(
-            prompt,
-            true
+            userPrompt,
+            false,
+            systemPrompt
         );
 
 
@@ -211,61 +198,32 @@ app.post('/chat', async (req, res) => {
             asksForFullStory(prompt);
 
 
-        const chatPrompt = `
-You are LitWise, an encouraging AI literature tutor.
+        const systemPrompt = `You are LitWise, a helpful and friendly literature tutor for students.
+CRITICAL INSTRUCTIONS:
+- Answer ONLY what the student asked in simple, natural, conversational paragraphs.
+- Provide ONLY plain text.
+- NEVER use markdown bold/italic asterisks (no ** or *), NEVER use markdown headers (#), NEVER use markdown tables (|), and NEVER use bullet points.
+- NEVER add extra unrequested sections such as "Why It Matters", "Study Tips", "Summary", or quizzes.`;
 
-Student question:
-"${prompt}"
-
-Current book:
-"${bookTitle || 'Not specified'}"
-
-Known analysis:
-${JSON.stringify(
-    analysis || {},
-    null,
-    2
-)}
-
-Instructions:
-
-- Answer in a warm, helpful teaching tone.
-- Keep the response focused on literature learning.
-- If a book is provided, tailor the answer to that text.
-- If the student asks for essay help, include a clear thesis direction.
-- If the question is unclear, make a helpful best effort instead of refusing.
+        const userPrompt = `Book: ${bookTitle || 'Not specified'}
+Student Question: ${prompt}
 
 ${
     wantsFullStory
-        ? `
-The student explicitly wants the whole story, complete plot, or full story.
+        ? 'Retell the full story clearly from beginning to end in plain text paragraphs (around 350-500 words).'
+        : 'Explain this directly, clearly, and simply in plain text (under 180 words).'
+}`;
 
-Provide a fuller spoiler-aware retelling covering the major events from beginning to end.
-
-Target approximately 450-700 words.
-`
-        : `
-Keep the response concise and student-friendly.
-
-Target under 220 words unless additional explanation is genuinely necessary.
-`
-}
-        `.trim();
-
-
-        // IMPORTANT:
-        // Do NOT pass true here.
-        //
-        // Chat should return normal text,
-        // not JSON Schema output.
 
         const reply = await generateText(
-            chatPrompt
+            userPrompt,
+            false,
+            systemPrompt
         );
 
 
         return res.json({
-            reply
+            reply: cleanChatReply(reply)
         });
 
     } catch (error) {
@@ -283,6 +241,35 @@ Target under 220 words unless additional explanation is genuinely necessary.
         });
     }
 });
+
+
+// --------------------------------------------------
+// CLEAN CHAT REPLY SANITIZER
+// --------------------------------------------------
+
+function cleanChatReply(text) {
+    if (!text || typeof text !== 'string') return '';
+    let cleaned = text;
+
+    // Remove markdown table headers & separator lines
+    cleaned = cleaned.replace(/^\|.*\|$/gm, '');
+    cleaned = cleaned.replace(/\|[^\n\r]*\|/g, '');
+
+    // Remove unwanted auto-generated meta sections at the end
+    cleaned = cleaned.replace(/(Why (He|She|It|They) Matters?|Quick Study Tips?|Study Tips?|Key Traits?|Literary Significance):?[\s\S]*$/i, '');
+
+    // Remove all markdown bold/italic asterisks, underscores, backticks, hashes
+    cleaned = cleaned.replace(/\*{1,3}/g, '');
+    cleaned = cleaned.replace(/_{1,3}/g, '');
+    cleaned = cleaned.replace(/`{1,3}/g, '');
+    cleaned = cleaned.replace(/^#+\s*/gm, '');
+
+    // Clean up dangling dashes, pipes, and whitespace
+    cleaned = cleaned.replace(/^[ \t]*[-–—|•][ \t]*/gm, '');
+    cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, '\n\n');
+
+    return cleaned.trim();
+}
 
 
 // --------------------------------------------------
@@ -305,156 +292,96 @@ app.listen(
 
 async function generateText(
     prompt,
-    structured = false
+    structured = false,
+    systemPrompt = null
 ) {
 
-    const requestBody = {
+    const messages = [];
 
-        model: modelName,
-
-        messages: [
-            {
-                role: 'user',
-                content: prompt
-            }
-        ],
-
-        temperature:
-            structured
-                ? 0.3
-                : 0.7
-    };
-
-
-    // --------------------------------------------------
-    // STRICT JSON MODE
-    // ONLY USED FOR /analyze
-    // --------------------------------------------------
-
-if (structured) {
-
-    requestBody.reasoning_format = 'hidden';
-
-    requestBody.response_format = {
-    type: 'json_schema',
-    json_schema: {
-        name: 'literature_analysis',
-        strict: true,
-        schema: {
-            type: 'object',
-
-            properties: {
-
-                title: {
-                    type: 'string'
-                },
-
-                summary: {
-                    type: 'string'
-                },
-
-                whyItMatters: {
-                    type: 'string'
-                },
-
-                themes: {
-                    type: 'array',
-                    items: {
-                        type: 'string'
-                    }
-                },
-
-characters: {
-    type: 'array',
-    items: {
-        type: 'string'
+    if (systemPrompt) {
+        messages.push({
+            role: 'system',
+            content: systemPrompt
+        });
     }
-},
-                discussionQuestions: {
-                    type: 'array',
-                    items: {
-                        type: 'string'
-                    }
-                },
 
-                studyTips: {
-                    type: 'array',
-                    items: {
-                        type: 'string'
-                    }
-                }
-            },
+    messages.push({
+        role: 'user',
+        content: prompt
+    });
 
-            required: [
-                'title',
-                'summary',
-                'whyItMatters',
-                'themes',
-                'characters',
-                'discussionQuestions',
-                'studyTips'
-            ],
-
-            additionalProperties: false
-        }
-    }
+  
+const requestBody = {
+    model: modelName,
+    messages,
+    temperature: structured ? 0.2 : 0.5,
+    max_completion_tokens: structured ? 8192 : 2048
 };
-}
 
-    // --------------------------------------------------
-    // CALL GROQ API
-    // --------------------------------------------------
+    if (structured) {
+        requestBody.response_format = {
+            type: 'json_object'
+        };
+    }
 
-    const response = await fetch(
-        groqApiUrl,
-        {
-            method: 'POST',
+    try {
+        const response = await fetch(
+            groqApiUrl,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody)
+            }
+        );
 
-            headers: {
-                'Content-Type':
-                    'application/json',
+        const payload = await response.json().catch(() => ({}));
 
-                Authorization:
-                    `Bearer ${apiKey}`
-            },
+        if (!response.ok) {
+            // If Groq validation failed but returned failed_generation, salvage the text
+            const failedGen =
+                payload?.error?.failed_generation ||
+                payload?.failed_generation;
 
-            body: JSON.stringify(
-                requestBody
-            )
+            if (failedGen && typeof failedGen === 'string' && failedGen.trim().length > 0) {
+                console.warn('Groq reported json failure, but provided failed_generation. Salvaging content.');
+                return failedGen.trim();
+            }
+
+            // If structured generation failed with 400, retry once in plain text mode
+            if (structured) {
+                console.warn(`Structured generation failed (${response.status}). Retrying without response_format...`);
+                return await generateText(prompt, false, systemPrompt);
+            }
+
+            throw buildProviderError(
+                response.status,
+                payload
+            );
         }
-    );
 
+        const content = payload?.choices?.[0]?.message?.content;
 
-    const payload =
-        await response
-            .json()
-            .catch(() => ({}));
+        if (!content) {
+            throw new Error('Groq returned an empty response.');
+        }
 
-
-    if (!response.ok) {
-
-        throw buildProviderError(
-            response.status,
-            payload
-        );
+        return String(content).trim();
+    } catch (err) {
+        if (structured && !err.isRetry) {
+            console.warn('Structured call encountered error. Retrying in plain mode...', err.message);
+            const retryErr = new Error();
+            retryErr.isRetry = true;
+            try {
+                return await generateText(prompt, false, systemPrompt);
+            } catch (retryError) {
+                throw err;
+            }
+        }
+        throw err;
     }
-
-
-    const content =
-        payload?.choices?.[0]?.message?.content;
-
-
-    if (!content) {
-
-        throw new Error(
-            'Groq returned an empty response.'
-        );
-    }
-
-
-    return String(
-        content
-    ).trim();
 }
 
 
@@ -467,86 +394,106 @@ function parseAnalysisResponse(
     fallbackTitle
 ) {
 
-    const cleaned =
-        stripCodeFences(rawText);
+    const cleaned = stripCodeFences(rawText);
 
-
-    // --------------------------------------------------
-    // FIRST ATTEMPT:
-    // DIRECT JSON PARSE
-    // --------------------------------------------------
-
+    // 1. Direct JSON parse
     try {
-
-        const parsed =
-            JSON.parse(cleaned);
-
-        return normalizeAnalysis(
-            parsed,
-            fallbackTitle
-        );
-
+        const parsed = JSON.parse(cleaned);
+        return normalizeAnalysis(parsed, fallbackTitle);
     } catch (error) {
-
-        console.warn(
-            'Direct JSON parse failed. Trying JSON extraction.'
-        );
+        // Continue
     }
 
+    // 2. Extract substring between first '{' and last '}'
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
 
-    // --------------------------------------------------
-    // SECOND ATTEMPT:
-    // EXTRACT JSON OBJECT
-    // --------------------------------------------------
+    if (
+        firstBrace !== -1 &&
+        lastBrace !== -1 &&
+        lastBrace > firstBrace
+    ) {
+        const jsonCandidate = cleaned.substring(
+            firstBrace,
+            lastBrace + 1
+        );
 
-    try {
-
-        const firstBrace =
-            cleaned.indexOf('{');
-
-        const lastBrace =
-            cleaned.lastIndexOf('}');
-
-
-        if (
-            firstBrace !== -1 &&
-            lastBrace !== -1 &&
-            lastBrace > firstBrace
-        ) {
-
-            const jsonText =
-                cleaned.substring(
-                    firstBrace,
-                    lastBrace + 1
-                );
-
-
-            const parsed =
-                JSON.parse(jsonText);
-
-
-            return normalizeAnalysis(
-                parsed,
-                fallbackTitle
-            );
+        try {
+            const parsed = JSON.parse(jsonCandidate);
+            return normalizeAnalysis(parsed, fallbackTitle);
+        } catch (error) {
+            // Attempt auto-repair
+            try {
+                const repaired = jsonCandidate
+                    .replace(/,\s*([}\]])/g, '$1')
+                    .replace(/[\u0000-\u001F]+/g, (match) =>
+                        match === '\n' ? '\\n' : match === '\t' ? '\\t' : ''
+                    );
+                const parsed = JSON.parse(repaired);
+                return normalizeAnalysis(parsed, fallbackTitle);
+            } catch (repairError) {
+                // Continue to regex extractor
+            }
         }
-
-    } catch (error) {
-
-        console.warn(
-            'JSON extraction failed. Using fallback parser.'
-        );
     }
 
+    // 3. Regex-based field extraction
+    try {
+        const extracted = extractFieldsWithRegex(cleaned);
+        if (extracted && (extracted.summary || extracted.title)) {
+            return normalizeAnalysis(extracted, fallbackTitle);
+        }
+    } catch (e) {
+        console.warn('Regex extraction failed:', e.message);
+    }
 
-    // --------------------------------------------------
-    // FINAL FALLBACK
-    // --------------------------------------------------
-
+    // 4. Final fallback
     return fallbackAnalysisFromText(
         cleaned,
         fallbackTitle
     );
+}
+
+
+// --------------------------------------------------
+// REGEX-BASED FIELD EXTRACTION
+// --------------------------------------------------
+
+function extractFieldsWithRegex(text) {
+    const extractStringField = (field) => {
+        const match = text.match(
+            new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'i')
+        );
+        return match
+            ? match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
+            : null;
+    };
+
+    const extractArrayField = (field) => {
+        const match = text.match(
+            new RegExp(`"${field}"\\s*:\\s*\\[([^\\]]*)\\]`, 'i')
+        );
+        if (!match) return [];
+        const items = [];
+        const itemRegex = /"((?:\\.|[^"\\])*)"/g;
+        let itemMatch;
+        while ((itemMatch = itemRegex.exec(match[1])) !== null) {
+            items.push(
+                itemMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
+            );
+        }
+        return items;
+    };
+
+    return {
+        title: extractStringField('title'),
+        summary: extractStringField('summary'),
+        whyItMatters: extractStringField('whyItMatters'),
+        themes: extractArrayField('themes'),
+        characters: extractArrayField('characters'),
+        discussionQuestions: extractArrayField('discussionQuestions'),
+        studyTips: extractArrayField('studyTips')
+    };
 }
 
 
@@ -566,7 +513,7 @@ function stripCodeFences(text) {
             ''
         )
         .replace(
-            /\s*```$/,
+            /\s*```$/i,
             ''
         )
         .trim();
