@@ -934,48 +934,42 @@ function loadAnalysisCache() {
 // SAVE ANALYSIS TO CACHE
 // --------------------------------------------------
 
-function cacheAnalysis(
-    cacheKey,
-    analysis
-) {
 
-    const normalizedTitleKey =
-        normalizeCacheKey(
-            analysis?.title || ''
+function cacheAnalysis(cacheKey, analysis) {
+    // Do not cache incomplete analyses.
+    const summary = analysis?.summary?.trim();
+    const significance = analysis?.whyItMatters?.trim();
+
+    if (
+        !summary ||
+        summary === 'Summary unavailable.' ||
+        summary === 'A summary could not be generated. Please try analyzing this title again.' ||
+        !significance ||
+        significance === 'Literary significance unavailable.' ||
+        significance === 'Literary significance could not be generated. Please try again.'
+    ) {
+        console.warn(
+            `Skipping incomplete analysis cache entry: ${analysis?.title || cacheKey}`
         );
-
-
-    analysisCache[cacheKey] =
-        analysis;
-
-
-    if (normalizedTitleKey) {
-
-        analysisCache[
-            normalizedTitleKey
-        ] = analysis;
+        return;
     }
 
+    const normalizedTitleKey = normalizeCacheKey(analysis?.title || '');
+
+    analysisCache[cacheKey] = analysis;
+
+    if (normalizedTitleKey) {
+        analysisCache[normalizedTitleKey] = analysis;
+    }
 
     try {
-
         ensureCacheDirExists();
 
-
         fs.writeFileSync(
-
             analysisCacheFile,
-
-            JSON.stringify(
-                analysisCache,
-                null,
-                2
-            )
-
+            JSON.stringify(analysisCache, null, 2)
         );
-
     } catch (error) {
-
         console.warn(
             'Could not persist analysis cache:',
             error.message
